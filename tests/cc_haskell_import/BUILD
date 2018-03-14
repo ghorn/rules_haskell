@@ -2,6 +2,7 @@ package(default_testonly = 1)
 
 load("@io_tweag_rules_haskell//haskell:haskell.bzl",
    "haskell_library",
+   "haskell_binary",
    "cc_haskell_import",
 )
 
@@ -24,9 +25,25 @@ cc_haskell_import(
   visibility = ["//tests:__subpackages__"],
 )
 
+haskell_binary(
+  name = "hs-bin",
+  srcs = ["Main.hs"],
+  prebuilt_dependencies = ["base"],
+)
+
+cc_haskell_import(
+  name = "hs-bin-so",
+  dep = ":hs-bin",
+  visibility = ["//tests:__subpackages__"],
+)
+
 cc_binary(
   name = "cc-bin",
-  srcs = ["main.c", ":hs-lib-b-so"],
+  srcs = [
+    "main.c",
+    ":hs-lib-b-so",
+    ":hs-bin",
+  ],
   deps = ["@ghc//:threaded-rts"],
   visibility = ["//tests:__subpackages__"],
 )
