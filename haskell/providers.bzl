@@ -28,6 +28,7 @@ HaskellBinaryInfo = provider(
   fields = {
     "source_files": "Set of source files.",
     "modules": "Set of module names.",
+    "dynamic_bin": "Binary file compiled with -dynamic and -pie."
   },
 )
 

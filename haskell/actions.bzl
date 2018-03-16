@@ -155,7 +155,9 @@ def compile_haskell_bin(ctx):
     ctx: Rule context.
 
   Returns:
-    list of File: Compiled object files.
+    (list of File, list of File):
+      * Object files
+      * Dynamic object files
   """
   c = _compilation_defaults(ctx)
   c.args.add(["-main-is", ctx.attr.main_function])
@@ -169,7 +171,7 @@ def compile_haskell_bin(ctx):
     arguments = [c.args]
   )
 
-  return c.object_files
+  return c.object_files, c.object_dyn_files
 
 def link_haskell_bin(ctx, object_files):
   """Link Haskell binary.
@@ -247,20 +249,6 @@ def link_haskell_bin(ctx, object_files):
 
   _add_external_libraries(args, dep_info.external_libraries)
 
-  so_symlink_prefix = paths.relativize(
-    paths.dirname(ctx.outputs.executable.path),
-    ctx.bin_dir.path,
-  )
-
-  # The resulting test executable should be able to find all external
-  # libraries when it is run by Bazel. That is achieved by setting RPATH to
-  # a relative path which when joined with working directory points to
-  # symlinks which in turn point to shared libraries. This is quite similar
-  # to the approach taken by cc_binary, cc_test, etc.:
-  #
-  # https://github.com/bazelbuild/bazel/blob/f98a7a2fedb3e714cef1038dcb85f83731150246/src/main/java/com/google/devtools/build/lib/rules/cpp/CppActionConfigs.java#L587-L605
-  args.add(["-optl-Wl,-rpath," + so_symlink_prefix])
-
   ctx.actions.run(
     inputs = depset(transitive = [
       depset(dep_info.static_libraries),
@@ -287,6 +275,28 @@ def link_haskell_bin(ctx, object_files):
     runfiles = ctx.runfiles(symlinks=so_symlinks, collect_data = True),
   )
 
+def link_static_bin(ctx, object_files):
+
+  so_symlink_prefix = paths.relativize(
+    paths.dirname(ctx.outputs.executable.path),
+    ctx.bin_dir.path,
+  )
+
+  # The resulting test executable should be able to find all external
+  # libraries when it is run by Bazel. That is achieved by setting RPATH to
+  # a relative path which when joined with working directory points to
+  # symlinks which in turn point to shared libraries. This is quite similar
+  # to the approach taken by cc_binary, cc_test, etc.:
+  #
+  # https://github.com/bazelbuild/bazel/blob/f98a7a2fedb3e714cef1038dcb85f83731150246/src/main/java/com/google/devtools/build/lib/rules/cpp/CppActionConfigs.java#L587-L605
+  args.add(["-optl-Wl,-rpath," + so_symlink_prefix])
+
+  return ctx.outputs.executable, so_symlink_prefix
+
+def link_dynamic_bin(ctx, object_dyn_files):
+
+  return None # dynamic_library
+
 def compile_haskell_lib(ctx):
   """Build arguments for Haskell package build.
 
@@ -306,7 +316,6 @@ def compile_haskell_lib(ctx):
   c = _compilation_defaults(ctx)
   c.args.add([
     "-package-name", _get_pkg_id(ctx),
-    "-static", "-dynamic-too"
   ])
 
   # This is absolutely required otherwise GHC doesn't know what package it's
@@ -318,21 +327,16 @@ def compile_haskell_lib(ctx):
   c.args.add(unit_id_args)
   c.haddock_args.add(unit_id_args, before_each="--optghc")
 
-  object_dyn_files = [
-    declare_compiled(ctx, s, ".dyn_o", directory=c.objects_dir)
-    for s in _hs_srcs(ctx)
-  ]
-
   ctx.actions.run(
     inputs = c.inputs,
-    outputs = c.outputs + object_dyn_files,
+    outputs = c.outputs,
     progress_message = "Compiling {0}".format(ctx.attr.name),
     env = c.env,
     executable = tools(ctx).ghc,
     arguments = [c.args],
   )
 
-  return c.interfaces_dir, c.interface_files, c.object_files, object_dyn_files, c.haddock_args
+  return c.interfaces_dir, c.interface_files, c.object_files, c.object_dyn_files, c.haddock_args
 
 def link_static_lib(ctx, object_files):
   """Link a static library for the package using given object files.
@@ -504,6 +508,9 @@ def _compilation_defaults(ctx):
   args.add(ctx.attr.compiler_flags)
   haddock_args.add(ctx.attr.compiler_flags, before_each="--optghc")
 
+  # Output static and dynamic object files.
+  args.add(["-static", "-dynamic-too"])
+
   # Common flags
   args.add([
     "-c",
@@ -549,6 +556,7 @@ def _compilation_defaults(ctx):
 
   # We want object and dynamic objects from all inputs.
   object_files = []
+  object_dyn_files = []
 
   # We need to keep interface files we produce so we can import
   # modules cross-package.
@@ -569,12 +577,18 @@ def _compilation_defaults(ctx):
       object_files.append(
         declare_compiled(ctx, s, ".o", directory=objects_dir)
       )
+      object_dyn_files.append(
+        declare_compiled(ctx, s, ".dyn_o", directory=objects_dir)
+      )
       interface_files.append(
         declare_compiled(ctx, s, ".hi", directory=interfaces_dir)
       )
     else:
       object_files.append(
         ctx.actions.declare_file(paths.join(objects_dir_raw, "Main.o"))
+      )
+      object_files.append(
+        ctx.actions.declare_file(paths.join(objects_dir_raw, "Main.dyn_o"))
       )
       interface_files.append(
         ctx.actions.declare_file(paths.join(interfaces_dir_raw, "Main.hi"))
@@ -608,10 +622,11 @@ def _compilation_defaults(ctx):
       depset(textual_headers),
       depset([tools(ctx).gcc]),
     ]),
-    outputs = [objects_dir, interfaces_dir] + object_files + interface_files,
+    outputs = [objects_dir, interfaces_dir] + object_files + object_dyn_files + interface_files,
     objects_dir = objects_dir,
     interfaces_dir = interfaces_dir,
     object_files = object_files,
+    object_dyn_files = object_dyn_files,
     interface_files = interface_files,
     env = dicts.add({
       "LD_LIBRARY_PATH": get_external_libs_path(dep_info.external_libraries),

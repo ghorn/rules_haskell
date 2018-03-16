@@ -9,7 +9,8 @@ load(":providers.bzl",
 
 load(":actions.bzl",
   "compile_haskell_bin",
-  "link_haskell_bin",
+  "link_static_bin",
+  "link_dynamic_bin",
   "compile_haskell_lib",
   "link_static_lib",
   "link_dynamic_lib",
@@ -73,14 +74,30 @@ _haskell_common_attrs = {
 }
 
 def _haskell_binary_impl(ctx):
-  object_files = compile_haskell_bin(ctx)
-  default_info = link_haskell_bin(ctx, object_files)
+  object_files, object_dyn_files = compile_haskell_bin(ctx)
+  static_binary, so_symlink_prefix = link_static_bin(ctx, object_files)
+  dynamic_binary = link_dynamic_bin(ctx, object_dyn_files)
   dep_info = gather_dep_info(ctx)
   bin_info = infer_bin_info(ctx)
+
+  # New we have to figure out symlinks to shared libraries to create for
+  # running tests.
+  so_symlinks = {}
+
+  for lib in set.to_list(dep_info.external_libraries):
+    so_symlinks[paths.join(so_symlink_prefix, paths.basename(lib.path))] = lib
+
   return [
     dep_info, # HaskellBuildInfo
     bin_info, # HaskellBinaryInfo
-    default_info, # DefaultInfo
+    DefaultInfo(
+      executable = static_binary,
+      files = dpeset([
+        static_binary,
+        dynamic_binary,
+      ]),
+      runfiles = ctx.runfiles(symlinks=so_symlinks, collect_data = True),
+    ),
   ]
 
 def _mk_binary_rule(**kwargs):
