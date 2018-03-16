@@ -161,7 +161,7 @@ def compile_haskell_bin(ctx):
       * Dynamic object files
   """
   c = _compilation_defaults(ctx)
-  c.args.add(["", "-main-is", ctx.attr.main_function])
+  c.args.add(["-main-is", ctx.attr.main_function])
 
   ctx.actions.run(
     inputs = c.inputs,
@@ -233,7 +233,10 @@ def link_haskell_bin(ctx, object_files, so_extension):
     paths.replace_extension(ctx.attr.name, ".so")
   ) if so_extension else ctx.outputs.executable
 
-  args.add(["-o", output_exe.path, dummy_static_lib.path]) # "-pie",
+  if so_extension:
+    args.add(["-dynamic", "-pie"])
+
+  args.add(["-o", output_exe.path, dummy_static_lib.path])
 
   for o in object_files:
     args.add(["-optl", o.path])
@@ -583,7 +586,7 @@ def _compilation_defaults(ctx):
       object_files.append(
         ctx.actions.declare_file(paths.join(objects_dir_raw, "Main.o"))
       )
-      object_files.append(
+      object_dyn_files.append(
         ctx.actions.declare_file(paths.join(objects_dir_raw, "Main.dyn_o"))
       )
       interface_files.append(

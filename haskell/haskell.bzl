@@ -75,7 +75,6 @@ _haskell_common_attrs = {
 
 def _haskell_binary_impl(ctx):
   object_files, object_dyn_files = compile_haskell_bin(ctx)
-  # TODO create a symbolic link here instead
   static_binary, so_symlink_prefix = link_haskell_bin(ctx, object_files, False)
   dynamic_binary, _ = link_haskell_bin(ctx, object_dyn_files, True)
   dep_info = gather_dep_info(ctx)
