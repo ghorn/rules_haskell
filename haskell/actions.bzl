@@ -53,6 +53,7 @@ _DefaultCompileInfo = provider(
     "objects_dir": "Object files directory.",
     "interfaces_dir": "Interface files directory.",
     "object_files": "Object files.",
+    "object_dyn_files": "Dynamic object files.",
     "interface_files": "Interface files.",
     "env": "Default env vars."
   },
@@ -215,19 +216,24 @@ module BazelDummy () where
 
   return dummy_static_lib
 
-def link_bin(ctx, object_files):
+def link_bin(ctx, object_files, so_extension):
   """Link Haskell binary from static object files.
 
   Args:
     ctx: Rule context.
+    TODO
   """
 
-  dummy_static_lib = _create_dummy_archive(cxt)
+  dummy_static_lib = _create_dummy_archive(ctx)
 
   args = ctx.actions.args()
   _add_mode_options(ctx, args)
   args.add(ctx.attr.compiler_flags)
-  args.add(["-pie", "-o", ctx.outputs.executable.path, dummy_static_lib.path])
+  output_exe = ctx.actions.declare_file(
+    paths.replace_extension(ctx.attr.name, ".so")
+  ) if so_extension else ctx.outputs.executable
+
+  args.add(["-pie", "-o", output_exe.path, dummy_static_lib.path])
 
   for o in object_files:
     args.add(["-optl", o.path])
@@ -267,7 +273,7 @@ def link_bin(ctx, object_files):
   #
   # https://github.com/bazelbuild/bazel/blob/f98a7a2fedb3e714cef1038dcb85f83731150246/src/main/java/com/google/devtools/build/lib/rules/cpp/CppActionConfigs.java#L587-L605
   so_symlink_prefix = paths.relativize(
-    paths.dirname(ctx.outputs.executable.path),
+    paths.dirname(output_exe.path),
     ctx.bin_dir.path,
   )
   args.add(["-optl-Wl,-rpath," + so_symlink_prefix])
@@ -279,13 +285,13 @@ def link_bin(ctx, object_files):
       depset([dummy_static_lib]),
       set.to_depset(dep_info.external_libraries),
     ]),
-    outputs = [ctx.outputs.executable],
-    progress_message = "Linking static {0}".format(ctx.outputs.executable.basename),
+    outputs = [output_exe],
+    progress_message = "Linking {0}".format(output_exe),
     executable = tools(ctx).ghc,
     arguments = [args]
   )
 
-  return ctx.outputs.executable, so_symlink_prefix
+  return output_exe, so_symlink_prefix
 
 def compile_haskell_lib(ctx):
   """Build arguments for Haskell package build.

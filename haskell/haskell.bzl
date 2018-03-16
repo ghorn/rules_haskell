@@ -10,7 +10,6 @@ load(":providers.bzl",
 load(":actions.bzl",
   "compile_haskell_bin",
   "link_bin",
-  "link_bin",
   "compile_haskell_lib",
   "link_static_lib",
   "link_dynamic_lib",
@@ -21,6 +20,7 @@ load(":actions.bzl",
 )
 
 load(":set.bzl", "set")
+load("@bazel_skylib//:lib.bzl", "paths")
 
 # For re-exports:
 load(":haddock.bzl",
@@ -75,8 +75,8 @@ _haskell_common_attrs = {
 
 def _haskell_binary_impl(ctx):
   object_files, object_dyn_files = compile_haskell_bin(ctx)
-  static_binary, so_symlink_prefix = link_bin(ctx, object_files)
-  dynamic_binary, _ = link_dynamic_bin(ctx, object_dyn_files)
+  static_binary, so_symlink_prefix = link_bin(ctx, object_files, False)
+  dynamic_binary, _ = link_bin(ctx, object_dyn_files, True)
   dep_info = gather_dep_info(ctx)
   bin_info = infer_bin_info(ctx, dynamic_binary)
 
@@ -92,7 +92,7 @@ def _haskell_binary_impl(ctx):
     bin_info, # HaskellBinaryInfo
     DefaultInfo(
       executable = static_binary,
-      files = dpeset([
+      files = depset([
         static_binary,
         dynamic_binary,
       ]),
