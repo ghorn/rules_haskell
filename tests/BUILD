@@ -21,53 +21,71 @@ haskell_toolchain(
 
 rule_test(
   name = "test-binary-simple",
-  generates = ["binary-simple"],
+  generates = [
+    "binary-simple",
+    "binary-simple.so",
+  ],
   rule = "//tests/binary-simple",
   size = "small",
 )
 
 rule_test(
   name = "test-binary-custom-main",
-  generates = ["binary-custom-main"],
+  generates = [
+    "binary-custom-main",
+    "binary-custom-main.so",
+  ],
   rule = "//tests/binary-custom-main",
   size = "small",
 )
 
 rule_test(
   name = "test-binary-with-lib",
-  generates = ["binary-with-lib"],
+  generates = [
+    "binary-with-lib",
+    "binary-with-lib.so",
+  ],
   rule = "//tests/binary-with-lib",
   size = "small",
 )
 
 rule_test(
   name = "test-binary-with-prebuilt",
-  generates = ["binary-with-prebuilt"],
+  generates = [
+    "binary-with-prebuilt",
+    "binary-with-prebuilt.so",
+  ],
   rule = "//tests/binary-with-prebuilt",
   size = "small",
 )
 
 rule_test(
   name = "test-binary-with-main",
-  generates = ["binary-with-main"],
+  generates = [
+    "binary-with-main",
+    "binary-with-main.so",
+  ],
   rule = "//tests/binary-with-main",
   size = "small",
 )
 
 rule_test(
   name = "test-binary-with-sysdeps",
-  generates = ["binary-with-sysdeps"],
+  generates = [
+    "binary-with-sysdeps",
+    "binary-with-sysdeps.so",
+  ],
   rule = "//tests/binary-with-sysdeps",
   size = "small",
 )
 
-sh_test(
-  name = "test-binary-with-data",
-  size = "small",
-  srcs = ["//tests/binary-with-data"],
-  data = ["//tests/binary-with-data:bin1"],
-  args = ["$(location //tests/binary-with-data:bin1)"],
-)
+# sh_test(
+#   name = "test-binary-with-data",
+#   size = "small",
+#   srcs = ["//tests/binary-with-data"],
+#   data = ["//tests/binary-with-data:bin1"],
+#   args = ["$(location //tests/binary-with-data:bin1)"],
+# )
 
 rule_test(
   name = "test-library-deps",
@@ -91,7 +109,10 @@ rule_test(
 
 rule_test(
   name = "test-hsc",
-  generates = ["hsc"],
+  generates = [
+    "hsc",
+    "hsc.so",
+  ],
   rule = "//tests/hsc",
   size = "small",
 )
@@ -138,7 +159,10 @@ rule_test(
 
 rule_test(
   name = "test-haskell_test",
-  generates = ["haskell_test"],
+  generates = [
+    "haskell_test",
+    "haskell_test.so",
+  ],
   rule = "//tests/haskell_test:haskell_test",
   size = "small",
 )
@@ -165,7 +189,10 @@ rule_test(
 
 rule_test(
   name = "test-java_classpath",
-  generates = ["java_classpath"],
+  generates = [
+    "java_classpath",
+    "java_classpath.so",
+  ],
   rule = "//tests/java_classpath",
   size = "small",
 )
@@ -197,28 +224,40 @@ sh_test(
 
 rule_test(
   name = "test-lhs",
-  generates = ["lhs-bin"],
+  generates = [
+    "lhs-bin",
+    "lhs-bin.so",
+  ],
   rule = "//tests/lhs:lhs-bin",
   size = "small",
 )
 
 rule_test(
   name = "test-hs-boot",
-  generates = ["hs-boot"],
+  generates = [
+    "hs-boot",
+    "hs-boot.so",
+  ],
   rule = "//tests/hs-boot:hs-boot",
   size = "small",
 )
 
 rule_test(
   name = "test-textual-hdrs",
-  generates = ["textual-hdrs"],
+  generates = [
+    "textual-hdrs",
+    "textual-hdrs.so",
+  ],
   rule = "//tests/textual-hdrs:textual-hdrs",
   size = "small",
 )
 
 rule_test(
   name = "test-two-libs",
-  generates = ["two-libs"],
+  generates = [
+    "two-libs",
+    "two-libs.so",
+  ],
   rule = "//tests/two-libs:two-libs",
   size = "small",
 )

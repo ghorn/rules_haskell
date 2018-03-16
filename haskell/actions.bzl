@@ -161,7 +161,7 @@ def compile_haskell_bin(ctx):
       * Dynamic object files
   """
   c = _compilation_defaults(ctx)
-  c.args.add(["-main-is", ctx.attr.main_function])
+  c.args.add(["", "-main-is", ctx.attr.main_function])
 
   ctx.actions.run(
     inputs = c.inputs,
@@ -216,7 +216,7 @@ module BazelDummy () where
 
   return dummy_static_lib
 
-def link_bin(ctx, object_files, so_extension):
+def link_haskell_bin(ctx, object_files, so_extension):
   """Link Haskell binary from static object files.
 
   Args:
@@ -233,7 +233,7 @@ def link_bin(ctx, object_files, so_extension):
     paths.replace_extension(ctx.attr.name, ".so")
   ) if so_extension else ctx.outputs.executable
 
-  args.add(["-pie", "-o", output_exe.path, dummy_static_lib.path])
+  args.add(["-o", output_exe.path, dummy_static_lib.path]) # "-pie",
 
   for o in object_files:
     args.add(["-optl", o.path])
@@ -286,7 +286,7 @@ def link_bin(ctx, object_files, so_extension):
       set.to_depset(dep_info.external_libraries),
     ]),
     outputs = [output_exe],
-    progress_message = "Linking {0}".format(output_exe),
+    progress_message = "Linking {0}".format(output_exe.basename),
     executable = tools(ctx).ghc,
     arguments = [args]
   )
