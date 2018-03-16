@@ -94,9 +94,17 @@ Example:
 """
 
 def _cc_haskell_import(ctx):
+  additional_dyn_libs = []
+
+  if HaskellBinaryInfo in ctx.attr.dep:
+    additional_dyn_libs = [ctx.attr.dep[HaskellBinaryInfo].dynamic_bin]
+
   if HaskellBuildInfo in ctx.attr.dep:
     return [DefaultInfo(
-      files = set.to_depset(ctx.attr.dep[HaskellBuildInfo].dynamic_libraries)
+      files = set.to_depset(
+        additional_dyn_libs +
+        ctx.attr.dep[HaskellBuildInfo].dynamic_libraries
+      )
     )]
   else:
     fail("{0} has to provide HaskellBuildInfo".format(ctx.attr.dep.label.name))

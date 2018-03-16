@@ -9,8 +9,8 @@ load(":providers.bzl",
 
 load(":actions.bzl",
   "compile_haskell_bin",
-  "link_static_bin",
-  "link_dynamic_bin",
+  "link_bin",
+  "link_bin",
   "compile_haskell_lib",
   "link_static_lib",
   "link_dynamic_lib",
@@ -75,10 +75,10 @@ _haskell_common_attrs = {
 
 def _haskell_binary_impl(ctx):
   object_files, object_dyn_files = compile_haskell_bin(ctx)
-  static_binary, so_symlink_prefix = link_static_bin(ctx, object_files)
-  dynamic_binary = link_dynamic_bin(ctx, object_dyn_files)
+  static_binary, so_symlink_prefix = link_bin(ctx, object_files)
+  dynamic_binary, _ = link_dynamic_bin(ctx, object_dyn_files)
   dep_info = gather_dep_info(ctx)
-  bin_info = infer_bin_info(ctx)
+  bin_info = infer_bin_info(ctx, dynamic_binary)
 
   # New we have to figure out symlinks to shared libraries to create for
   # running tests.

@@ -173,36 +173,36 @@ def compile_haskell_bin(ctx):
 
   return c.object_files, c.object_dyn_files
 
-def link_haskell_bin(ctx, object_files):
-  """Link Haskell binary.
+def _create_dummy_archive(ctx):
+  """Create empty archive so that GHC has some input files to work on during
+  linking.
+
+  See: https://github.com/facebook/buck/blob/126d576d5c07ce382e447533b57794ae1a358cc2/src/com/facebook/buck/haskell/HaskellDescriptionUtils.java#L295
 
   Args:
     ctx: Rule context.
-    object_files: Object files to include during linking.
 
   Returns:
-    File: Built Haskell executable.
+    File, the created dummy archive.
   """
-  # Create empty archive so that GHC has some input files to work on during linking
-  #
-  # https://github.com/facebook/buck/blob/126d576d5c07ce382e447533b57794ae1a358cc2/src/com/facebook/buck/haskell/HaskellDescriptionUtils.java#L295
-  dummy_input = ctx.actions.declare_file("BazelDummy.hs")
-  dummy_object = ctx.actions.declare_file(paths.replace_extension("BazelDummy", ".o"))
 
-  ctx.actions.write(output=dummy_input, content="\n".join([
-    "{-# LANGUAGE NoImplicitPrelude #-}",
-    "module BazelDummy () where"
-  ]))
+  dummy_raw = "BazelDummy.hs"
+  dummy_input = ctx.actions.declare_file(dummy_raw)
+  dummy_object = ctx.actions.declare_file(paths.replace_extension(dummy_raw, ".o"))
+
+  ctx.actions.write(output=dummy_input, content="""
+{-# LANGUAGE NoImplicitPrelude #-}
+module BazelDummy () where
+""")
 
   dummy_static_lib = ctx.actions.declare_file("libempty.a")
-  dummy_args = ctx.actions.args()
-  dummy_args.add(["-no-link", dummy_input])
   ctx.actions.run(
     inputs = [dummy_input],
     outputs = [dummy_object],
     executable = tools(ctx).ghc,
-    arguments = [dummy_args]
+    arguments = ["-no-link", dummy_input.path],
   )
+
   ar_args = ctx.actions.args()
   ar_args.add(["qc", dummy_static_lib, dummy_object])
 
@@ -213,17 +213,27 @@ def link_haskell_bin(ctx, object_files):
     arguments = [ar_args]
   )
 
+  return dummy_static_lib
+
+def link_bin(ctx, object_files):
+  """Link Haskell binary from static object files.
+
+  Args:
+    ctx: Rule context.
+  """
+
+  dummy_static_lib = _create_dummy_archive(cxt)
+
   args = ctx.actions.args()
-
   _add_mode_options(ctx, args)
-
   args.add(ctx.attr.compiler_flags)
-  args.add(["-o", ctx.outputs.executable.path, dummy_static_lib.path])
+  args.add(["-pie", "-o", ctx.outputs.executable.path, dummy_static_lib.path])
 
   for o in object_files:
     args.add(["-optl", o.path])
 
   dep_info = gather_dep_info(ctx)
+
   # De-duplicate optl calls while preserving ordering: we want last
   # invocation of an object to remain last. That is `-optl foo -optl
   # bar -optl foo` becomes `-optl bar -optl foo`. Do this by counting
@@ -249,6 +259,19 @@ def link_haskell_bin(ctx, object_files):
 
   _add_external_libraries(args, dep_info.external_libraries)
 
+  # The resulting test executable should be able to find all external
+  # libraries when it is run by Bazel. That is achieved by setting RPATH to
+  # a relative path which when joined with working directory points to
+  # symlinks which in turn point to shared libraries. This is quite similar
+  # to the approach taken by cc_binary, cc_test, etc.:
+  #
+  # https://github.com/bazelbuild/bazel/blob/f98a7a2fedb3e714cef1038dcb85f83731150246/src/main/java/com/google/devtools/build/lib/rules/cpp/CppActionConfigs.java#L587-L605
+  so_symlink_prefix = paths.relativize(
+    paths.dirname(ctx.outputs.executable.path),
+    ctx.bin_dir.path,
+  )
+  args.add(["-optl-Wl,-rpath," + so_symlink_prefix])
+
   ctx.actions.run(
     inputs = depset(transitive = [
       depset(dep_info.static_libraries),
@@ -257,45 +280,12 @@ def link_haskell_bin(ctx, object_files):
       set.to_depset(dep_info.external_libraries),
     ]),
     outputs = [ctx.outputs.executable],
-    progress_message = "Linking {0}".format(ctx.outputs.executable.basename),
+    progress_message = "Linking static {0}".format(ctx.outputs.executable.basename),
     executable = tools(ctx).ghc,
     arguments = [args]
   )
 
-  # New we have to figure out symlinks to shared libraries to create for
-  # running tests.
-  so_symlinks = {}
-
-  for lib in set.to_list(dep_info.external_libraries):
-    so_symlinks[paths.join(so_symlink_prefix, paths.basename(lib.path))] = lib
-
-  return DefaultInfo(
-    executable = ctx.outputs.executable,
-    files = depset([ctx.outputs.executable]),
-    runfiles = ctx.runfiles(symlinks=so_symlinks, collect_data = True),
-  )
-
-def link_static_bin(ctx, object_files):
-
-  so_symlink_prefix = paths.relativize(
-    paths.dirname(ctx.outputs.executable.path),
-    ctx.bin_dir.path,
-  )
-
-  # The resulting test executable should be able to find all external
-  # libraries when it is run by Bazel. That is achieved by setting RPATH to
-  # a relative path which when joined with working directory points to
-  # symlinks which in turn point to shared libraries. This is quite similar
-  # to the approach taken by cc_binary, cc_test, etc.:
-  #
-  # https://github.com/bazelbuild/bazel/blob/f98a7a2fedb3e714cef1038dcb85f83731150246/src/main/java/com/google/devtools/build/lib/rules/cpp/CppActionConfigs.java#L587-L605
-  args.add(["-optl-Wl,-rpath," + so_symlink_prefix])
-
   return ctx.outputs.executable, so_symlink_prefix
-
-def link_dynamic_bin(ctx, object_dyn_files):
-
-  return None # dynamic_library
 
 def compile_haskell_lib(ctx):
   """Build arguments for Haskell package build.
@@ -753,11 +743,12 @@ def infer_lib_info(ctx, haddock_args=[]):
     haddock_args = haddock_args
   )
 
-def infer_bin_info(ctx):
+def infer_bin_info(ctx, dynamic_bin):
   """Return populated `HaskellBinaryInfo` provider.
 
   Args:
     ctx: Rule context.
+    dynamic_bin: File, binary compiled from dynamic object files.
 
   Returns:
     HaskellBinaryInfo: binary-specific information.
@@ -774,4 +765,5 @@ def infer_bin_info(ctx):
   return HaskellBinaryInfo(
     source_files = set.from_list(ctx.files.srcs),
     modules = set.from_list(modules),
+    dynamic_bin = dynamic_bin,
   )
