@@ -7,10 +7,18 @@ load(
     "haskell_library",
 )
 
+cc_library(
+    name = "c-lib",
+    srcs = ["cbits.c"],
+)
+
 haskell_library(
     name = "hs-lib-a",
     srcs = ["LibA.hs"],
-    deps = ["//tests:base"],
+    deps = [
+        "//tests:base",
+        ":c-lib",
+    ],
 )
 
 haskell_library(
